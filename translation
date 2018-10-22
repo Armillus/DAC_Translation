@@ -1,0 +1,60 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+import sys
+
+def display_usage():
+    print("./translate old_file new_file french_file.")
+    return (0)
+
+def load_file(filename):
+    buffer = []
+
+    try:
+        with open(filename, "r", encoding="utf-16") as txt_file:
+            buffer = txt_file.read()
+    except (PermissionError, FileNotFoundError) as e:
+        sys.stderr.write(e)
+        sys.exit(84)
+    if len(buffer) == 0:
+        sys.stderr.write("[Error] Empty file.\n");
+        sys.exit(84)
+    return (buffer.splitlines())
+
+def write_new_file(buffer):
+    idx = len(sys.argv[1]) - 1
+    while sys.argv[1][idx] != '/':
+        idx -= 1
+    file = open(sys.argv[1][idx + 1:], "w")
+    file.write('\n'.join(buffer))
+    file.close
+    return (0)
+
+def cmp_files():
+    new_file = load_file(sys.argv[2])
+    old_file = load_file(sys.argv[1])
+    french_file = load_file(sys.argv[3])
+    size = len(french_file)
+
+    for j in range(len(old_file)):
+        idx = old_file[j].find('}')
+        tmp = old_file[j][:idx]
+
+        for i in range(len(new_file)):
+            if len(new_file[i]) != 0 and [i][0] == '¬':
+                new_file[i] = new_file[i][1:]
+            if new_file[i] == old_file[j]:
+                if j < size:
+                    new_file[i] = french_file[j]
+                break
+            elif idx == -1 or new_file[i].startswith(tmp):
+                break
+    return (write_new_file(new_file))
+
+def main():
+    if len(sys.argv) != 4 or "-h" in sys.argv:
+        return (display_usage())
+    return (cmp_files())
+
+if __name__ == "__main__":
+    main()
