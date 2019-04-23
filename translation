@@ -1,60 +1,130 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-import sys
+import requests
+import sys, os, html
+from time import sleep
+from google.cloud import translate
+
 
 def display_usage():
-    print("./translate old_file new_file french_file.")
-    return (0)
+    print("./translate folder [-u <new_text_folder>].")
+    return (84)
 
-def load_file(filename):
+
+def load_file(filepath):
     buffer = []
 
     try:
-        with open(filename, "r", encoding="utf-16") as txt_file:
-            buffer = txt_file.read()
-    except (PermissionError, FileNotFoundError) as e:
-        sys.stderr.write(e)
-        sys.exit(84)
-    if len(buffer) == 0:
-        sys.stderr.write("[Error] Empty file.\n");
+        with open(filepath, "r", encoding="utf-16") as file:
+            buffer = file.read()
+            if len(buffer) == 0:
+                sys.stderr.write("[Error] Empty file.\n");
+                raise IOError
+    except IOError as e:
+        sys.stderr.write(str(e))
         sys.exit(84)
     return (buffer.splitlines())
 
-def write_new_file(buffer):
-    idx = len(sys.argv[1]) - 1
-    while sys.argv[1][idx] != '/':
-        idx -= 1
-    file = open(sys.argv[1][idx + 1:], "w")
-    file.write('\n'.join(buffer))
-    file.close
+
+def write_new_file(filepath, buffer):
+    path = "./translated/" + filepath[filepath.rfind('/') + 1:]
+
+    with open(path, "w", encoding="utf-16") as file:
+        file.write('\n'.join(buffer))
     return (0)
 
-def cmp_files():
-    new_file = load_file(sys.argv[2])
-    old_file = load_file(sys.argv[1])
-    french_file = load_file(sys.argv[3])
-    size = len(french_file)
 
-    for j in range(len(old_file)):
-        idx = old_file[j].find('}')
-        tmp = old_file[j][:idx]
+def update_translation(t, original_file, translated_file, new_file):
+    old_buf = load_file(original_file)
+    translated_buf = load_file(translated_file)
+    buffer = load_file(new_file)
+    i = 0
 
-        for i in range(len(new_file)):
-            if len(new_file[i]) != 0 and [i][0] == '¬':
-                new_file[i] = new_file[i][1:]
-            if new_file[i] == old_file[j]:
-                if j < size:
-                    new_file[i] = french_file[j]
-                break
-            elif idx == -1 or new_file[i].startswith(tmp):
-                break
-    return (write_new_file(new_file))
+    for line in buffer:
+        if len(line) != 0 and line[0] == '{':
+            j = 0
+            translated = False
 
-def main():
-    if len(sys.argv) != 4 or "-h" in sys.argv:
+            for l in old_buf:
+                if line == l:
+                    line = translated_buf[j]
+                    translated = True
+                    break
+                j += 1
+            if not translated:
+                line = t.translate(line[line.find('}') + 1:], 'fr')['translatedText']
+        i += 1
+    return (write_new_file(translated_file, buffer))
+
+
+def translate_file(t, filepath):
+    buffer = load_file(filepath)
+#    total = len(filebuf)
+    i = 1
+
+    for line in buffer:
+        if len(line) > 0 and line[0] == '{':
+            try:
+                sep_idx = line.find('}') + 1
+                res = t.translate(line[sep_idx:], 'fr')
+                line = line[:sep_idx] + html.unescape(res['translatedText'])
+#                print("Line %d/%d from %s is now translated!" % (i, total, filepath))
+                sleep(.2)
+            except Exception as e:
+                print(str(e))
+                pass
+        i += 1
+    return write_new_file(filepath, buffer)
+
+
+def get_files_to_translate(path = "./text", toUpdate = False):
+    files = []
+
+    for r, d, f in os.walk(path):
+        for file in f:
+            if file.endswith(".txt") and (toUpdate or not \
+               os.path.isfile("./translated/" + file)):
+                file_prefix = ''
+
+                if len(d) != 0:
+                    file_prefix += d + '/'
+                files.append(file_prefix + file)
+    return files, toUpdate
+
+
+def translate_all_files(files, toUpdate = False):
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "./google_cloud_service_account.json"
+    translator = translate.Client()
+    translation_prefix = "./translated/"
+    original_prefix = sys.argv[1] + '/'
+
+    if toUpdate:
+        new_fodler_prefix = sys.argv[3] + '/'
+    else:
+        new_folder_prefix = ''
+    for file in files:
+        print("Translation of %s in progress..." % (original_prefix + file))
+        try:
+            if toUpdate:
+                update_translation(translator,
+                                   original_prefix + file,
+                                   translation_prefix + file,
+                                   new_folder_prefix + file)
+            else:
+                translate_file(translator, original_prefix + file)
+        except Exception as e:
+            sys.stderr.write(str(e))
+            continue
+        print("Translation successfully ended!")
+    return 0
+
+
+def main(ac, av):
+    if not 1 < ac < 5 or "-h" in av or "--help" in av:
         return (display_usage())
-    return (cmp_files())
+    return translate_all_files(*get_files_to_translate(av[1], ac == 4 and av[2] == '-u'))
+
 
 if __name__ == "__main__":
-    main()
+    main(len(sys.argv), sys.argv)
