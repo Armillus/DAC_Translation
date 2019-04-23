@@ -41,40 +41,37 @@ def update_translation(t, original_file, translated_file, new_file):
     buffer = load_file(new_file)
     i = 0
 
-    for line in buffer:
-        if len(line) != 0 and line[0] == '{':
-            j = 0
+    for i, line in enumerate(buffer):
+        if len(line) != 0 and line[0] == '{' and not "DO NOT TRANSLATE" in line:
             translated = False
 
-            for l in old_buf:
+            for j, l in enumerate(old_buf):
                 if line == l:
-                    line = translated_buf[j]
+                    buffer[i] = translated_buf[j]
                     translated = True
                     break
-                j += 1
             if not translated:
-                line = t.translate(line[line.find('}') + 1:], 'fr')['translatedText']
-        i += 1
+                buffer[i] = t.translate(line[line.find('}') + 1:], 'fr')['translatedText']
     return (write_new_file(translated_file, buffer))
 
 
 def translate_file(t, filepath):
     buffer = load_file(filepath)
-#    total = len(filebuf)
-    i = 1
+    total = len(buffer)
 
-    for line in buffer:
-        if len(line) > 0 and line[0] == '{':
+    for i, line in enumerate(buffer):
+        if len(line) > 0 and line[0] == '{' and not "DO NOT TRANSLATE" in line:
             try:
                 sep_idx = line.find('}') + 1
                 res = t.translate(line[sep_idx:], 'fr')
-                line = line[:sep_idx] + html.unescape(res['translatedText'])
-#                print("Line %d/%d from %s is now translated!" % (i, total, filepath))
-                sleep(.2)
+                #print("Before = [%s]" % line)
+                buffer[i] = line[:sep_idx] + html.unescape(res['translatedText'])
+                #print("Line %d/%d from %s is now translated!" % (i, total, filepath))
+                #print("Result = [%s]" % line)
+                sleep(.15)
             except Exception as e:
                 print(str(e))
                 pass
-        i += 1
     return write_new_file(filepath, buffer)
 
 
